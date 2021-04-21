@@ -31,7 +31,7 @@
 #include <cuda_runtime.h>	// cudaMalloc, cudaFree
 
 __global__ void kernel(ulong* squares, ulong size) {
-	ulong i = threadIdx.x;
+	ulong i = threadIdx.x + (blockIdx.x * blockDim.x);
 	if(i < size) squares[i] *= 10;
 }
 
@@ -70,6 +70,7 @@ int main(int argc, char **argv)
 		printf("cudaMemcpy to device failed with %d\n", error_id);
 		exit(1);
 	}
+	
 	// Set configuration parameters
 	dim3 grid_size=(1); dim3 block_size=(size_squares);
 	
