@@ -18,7 +18,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
  * MA 02110-1301, USA.
  * 
- * 
  */
 
 
@@ -26,9 +25,6 @@
 #include <math.h>
 
 #include <cuda.h>
-#include <driver_types.h>	// cudaError_t
-#include <vector_types.h>
-#include <cuda_runtime.h>	// cudaMalloc, cudaFree
 
 __global__ void kernel(ulong* squares, ulong size) {
 	ulong i = threadIdx.x + (blockIdx.x * blockDim.x);

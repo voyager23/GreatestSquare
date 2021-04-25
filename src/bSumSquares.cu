@@ -1,5 +1,5 @@
 /*
- * SumSquares.cu
+ * bSumSquares.cu
  * 
  * Copyright 2021 mike <mike@fedora33>
  * 
@@ -24,11 +24,7 @@
 
 #include <stdio.h>
 #include <math.h>
-
 #include <cuda.h>
-#include <driver_types.h>	// cudaError_t
-#include <vector_types.h>
-#include <cuda_runtime.h>	// cudaMalloc, cudaFree
 
 __global__ void kernel(ulong* d_squares, const ulong n_squares, ulong* d_results, ulong N) {
 	ulong i = threadIdx.x + (blockIdx.x * blockDim.x);
@@ -52,23 +48,20 @@ int main(int argc, char **argv)
 {
 	cudaError_t error_id;
 	
-	// Allocate and set the host 'squares' array
-	ulong N = 1025;	
+	ulong N = 1024*1024;	// sum perfect square divisors up to this value 
+		
+	// Allocate and set the host 'perfect squares' array
 	ulong root_max = (ulong)floor(sqrt((double)N));	
 	const ulong n_squares = root_max + 1;	
 	ulong h_squares[n_squares];
 	for(int x = 0; x < n_squares; x += 1) h_squares[x] = x*x;
-	
-	// Allocate host results array
-	ulong h_results[N+1];
-	
 	// Allocate memory on device for 'squares'
 	ulong *d_squares;
 	error_id = cudaMalloc((void**)&d_squares, sizeof(ulong)*n_squares);
 	if(error_id != cudaSuccess) {
 		printf("cudaMalloc squares failed with %d\n", error_id);
 		exit(1);
-	}	
+	}
 	// Copy squares to device
 	error_id = cudaMemcpy(d_squares, h_squares, sizeof(ulong)*n_squares,
 		cudaMemcpyHostToDevice);
@@ -76,40 +69,50 @@ int main(int argc, char **argv)
 		printf("cudaMemcpy squares to device failed with %d\n", error_id);
 		exit(1);
 	}
-	// Allocate memory on device for N results
-	ulong *d_results;
-	error_id = cudaMalloc((void**)&d_results, sizeof(ulong)*(N+1));
+
+	// Allocate memory on host and device for 2 pages of N results
+	ulong *results_0 = NULL, *results_1 = NULL;
+	error_id = cudaMallocManaged((void**)results_0, sizeof(ulong)*(N+1));
 	if(error_id != cudaSuccess) {
-		printf("cudaMalloc results failed with %d\n", error_id);
+		printf("cudaMallocManaged (0) failed with %d\n", error_id);
+		exit(1);
+	}
+	error_id = cudaMallocManaged((void**)results_1, sizeof(ulong)*(N+1));
+	if(error_id != cudaSuccess) {
+		printf("cudaMallocManaged (1) results failed with %d\n", error_id);
 		exit(1);
 	}
 	
-	// Set configuration parameters
-	const ulong Nthreads = 1024;	// max number threads/block
-	const ulong Nblocks = (N/Nthreads)+1;
-	dim3 grid_size=(Nblocks); dim3 block_size=Nthreads;
+	// Set variables
+	ulong total = 0;
+	for(x = 0; x <= N; ++x) {
+		results_0 = 0;
+	}							// clear results
+	ulong *pagePtr = results_1;	// new results go here
+	ulong pageIdx = 0;			// page counter
+	
+	// set configuration
+	dim3 thread_size = (1024,1,1);
+	dim3 block_size = (1024,1,1);
+	
+	
+	
 	
 	// launch kernel
-	kernel<<<grid_size, block_size>>>(d_squares, n_squares, d_results, (N+1));
+	// kernel<<<grid_size, block_size>>>(d_squares, n_squares, d_results, (N+1));
 	
 	// Wait for device to finish?
 	//cudaDeviceSynchronize();
 	
-	// copy N results back to host
-	error_id = cudaMemcpy(h_results, d_results, sizeof(ulong)*(N+1),
-		cudaMemcpyDeviceToHost);
-	if(error_id != cudaSuccess) {
-		printf("cudaMemcpy to host  failed with %d\n", error_id);
-		exit(1);
-	}
 	
 	// Print results array
-	for(int x = 0; x < N+1; ++x) printf("%d:%ld  ", x, h_results[x]);
-	printf("\n");
+	// for(int x = 0; x < N+1; ++x) printf("%d:%ld  ", x, h_results[x]);
+	// printf("\n");
 
 	// Cleanup
 	cudaFree(d_squares);
-	cudaFree(d_results);
+	cudaFree(results_0);
+	cudaFree(results_1);
 	
 	return 0;
 }
