@@ -131,13 +131,30 @@ int main(int argc, char **argv)
 		printf("Failed to malloc h_sums.");
 		exit(1);
 	}
+	
+	// initialise to zero
+	for(int x = 0; x < (PageX*PageY); ++x) h_sums[x] = 0L;
+	
 	lines = (N / 1024) + 1;
 	pages = (lines / 190000) + 1;
 	
 	printf("N: %ld	lines: %d	pages: %d\n", N, lines, pages);
 	
+	long S = 0;
+	while(pages > 0) {
+		// launch kernel with appropriate parameters
+		// update S by summing values from host sums. Initialised to 0 for first pass
+		// device sync and test for errors
+		// copy device sums to host
+		// pages -= 1
+	}
+	// Update S by summing final page
+	// Output Result as S(N) = S
+		
+	
 	// CleanUp
 	free(h_sums);
+	cudaFree(d_sums);
 	return 0;
 }
 
