@@ -128,16 +128,18 @@ int main(int argc, char **argv)
 	// Value of INT_MAX is +2147483647 (32 bits)
 	// Using 1e9 as program limit then 976562 blocks are required
 	// launch the kernel
-	func_g<<<976564,1024>>>();
+	func_g<<<nBlocks,1024>>>();
 	error_id = cudaDeviceSynchronize();
 	if(error_id != cudaSuccess) {
 		printf("Kernel launch returned error code %d\n", error_id);
 		exit(1);
 	} else {
-		printf("\nkernel launched with %d blocks\n", 976564);
+		printf("\nkernel launched with %d blocks\n", nBlocks);
 	}
 	
 	// code to calc total sum of h_sums
+	// if NOT using ManagedMemory copy device to host
+	if(!MANAGED)
 	
 	// output S(N): total 
 	
