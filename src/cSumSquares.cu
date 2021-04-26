@@ -30,7 +30,13 @@ __global__ void set_squares(long *d_squares, long n_squares) {
 	if(i < n_squares) d_squares[i] = (int)(i+1)*(i+1);
 }
 
-__global__ void func_g(int* d_squares, const long limit, long *h_sums, long N) {
+//__global__ void func_g(int* d_squares, const long limit, long *h_sums, long N) {
+__global__ void func_g() {
+	
+
+	return;
+	//END DEBUG
+#if(0)	
 	long i = threadIdx.x + (blockDim.x * blockIdx.x);
 	if(i < N) {
 		// scan in reverse the squares array
@@ -46,6 +52,7 @@ __global__ void func_g(int* d_squares, const long limit, long *h_sums, long N) {
 			h_sums[i] = i;
 		}
 	} //
+#endif
 }
 
 int main(int argc, char **argv)
@@ -63,7 +70,7 @@ int main(int argc, char **argv)
 		exit(1);
 	}	
 	const long N = x;
-	if(N <= 1000000000L) {
+	if(N <= 1e9L) {
 		printf("target: %ld\n", N);
 	} else {
 		printf("target: %ld exceeds program limitations\n", N);
@@ -105,24 +112,43 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 #else
+	// allocate host memory (h_sums)
 	h_sums = (long*)malloc(sizeof(long)*N);
 	if(h_sums == NULL){
 		printf("malloc() h_sums failed.\n");
 		exit(1);
 	}
+	// allocate device memory (d_sums)
+	
 #endif
 	
-	
-	
 	// calculate the launch config based in thread blocks of 1024 threads
-	const int nBlocks = (N/1024) + 1;
+	int nBlocks = (N/1024) + 1;
+	// LIMIT OF nBlocks = 2147483647; // DEBUG kernel returns in 41s
+	// Value of INT_MAX is +2147483647 (32 bits)
+	// Using 1e9 as program limit then 976562 blocks are required
 	// launch the kernel
-	//func_g<<<nBlocks,1024>>()
+	func_g<<<976564,1024>>>();
+	error_id = cudaDeviceSynchronize();
+	if(error_id != cudaSuccess) {
+		printf("Kernel launch returned error code %d\n", error_id);
+		exit(1);
+	} else {
+		printf("\nkernel launched with %d blocks\n", 976564);
+	}
 	
-
-	//-------
+	// code to calc total sum of h_sums
+	
+	// output S(N): total 
+	
+	// CleanUp
 	cudaFree(d_squares);
+	
+#if(MANAGED)
 	cudaFree(h_sums);
+#else
+	free(h_sums);
+#endif
 	return 0;
 }
 
