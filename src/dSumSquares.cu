@@ -38,29 +38,28 @@ __global__ void set_squares(long *d_squares, long n_squares) {
 	if(i < n_squares) d_squares[i] = (int)(i+1)*(i+1);
 }
 
-//__global__ void func_g(int* d_squares, const long limit, long *h_sums, long N) {
-__global__ void func_g() {
-	
-
-	return;
-	//END DEBUG
-#if(0)	
+__global__ void func_g(long* d_squares, const long n_squares, long *d_sums, long N, long page_size, int page_idx) {
+	// Calc the index of result in device results page
 	long i = threadIdx.x + (blockDim.x * blockIdx.x);
-	if(i < N) {
+	// Calc actual target
+	long target = i + (page_size * page_idx);
+
+	if(target <= N) {
+		//printf("idx: %ld	target: %ld\n", i, target); return;
 		// scan in reverse the squares array
 		// save first square which divides i in results[i]
-		if(i > 3) {
-			for(long x = limit-1; x > 0; x -= 1) {
-				if((i % d_squares[x]) == 0) {
-					h_sums[i] = d_squares[x];
+		if(target > 3) {
+			for(long x = n_squares-1; x > 0; x -= 1) {
+				if((target % d_squares[x]) == 0) {
+					d_sums[i] = d_squares[x];
+					printf("x: %d target: %ld square: %ld\n", x, target, d_squares[x]);
 					break;
 				}
 			} // for...
 		} else {
-			h_sums[i] = i;
+			d_sums[i] = i;
 		}
-	} //
-#endif
+	} // if target...
 }
 
 int main(int argc, char **argv)
@@ -71,8 +70,7 @@ int main(int argc, char **argv)
 	// These values based on 1.56GiB available on device
 	const int PageY = 190000;
 	const int PageX = 1024;
-	int lines = 0;
-	int pages = 0;
+	const int PageSize = PageX*PageY;
 	
 	long *h_sums = NULL;	// large page of partial results
 	long *d_sums = NULL;
@@ -106,6 +104,7 @@ int main(int argc, char **argv)
 		exit(1);
 	}	
 	// launch the generator on kernel
+	printf("\nGenerating squares\n");
 	set_squares<<<1,limit>>>(d_squares, limit);
 	cudaDeviceSynchronize();
 
@@ -113,45 +112,65 @@ int main(int argc, char **argv)
 		// allocate space on host and copy device squares
 		long *h_squares = (long *)malloc(sizeof(long )*limit);
 		cudaMemcpy(h_squares, d_squares, sizeof(long )*limit, cudaMemcpyDeviceToHost);
-		// prlong array
+		// print long array of squares
 		for(long x = 0; x < limit; ++x) printf("%d:%ld  ", x, h_squares[x]); printf("\n");
 		// clear host array
 		free(h_squares);
 #endif
 	
 	// Allocate a results page on device
-	error_id = cudaMalloc(&d_sums, sizeof(long )*PageX*PageY);
+	error_id = cudaMalloc(&d_sums, sizeof(long )*PageSize);
 	if(error_id != cudaSuccess) {
 		printf("cudaMalloc d_sums failed with %d\n", error_id);
 		exit(1);
 	}		
 	// Allocate a results page on host	
-	h_sums = (long*)malloc(sizeof(long)*PageX*PageY);
+	h_sums = (long*)malloc(sizeof(long)*PageSize);
 	if(h_sums == NULL) {
 		printf("Failed to malloc h_sums.");
 		exit(1);
 	}
 	
 	// initialise to zero
-	for(int x = 0; x < (PageX*PageY); ++x) h_sums[x] = 0L;
+	for(int x = 0; x < PageSize; ++x) h_sums[x] = 0L;
 	
-	lines = (N / 1024) + 1;
-	pages = (lines / 190000) + 1;
-	
-	printf("N: %ld	lines: %d	pages: %d\n", N, lines, pages);
-	
-	long S = 0;
-	while(pages > 0) {
+	int rows = (N / 1024) + 1;
+	int pages = (rows / 190000) + 1;
+		printf("N: %ld	rows: %d	pages: %d\n", N, rows, pages);
+	long Sum = 0;
+	long counted = 0;
+	for(int pg = 0; pg < pages; ++pg) {
 		// launch kernel with appropriate parameters
-		// update S by summing values from host sums. Initialised to 0 for first pass
-		// device sync and test for errors
-		// copy device sums to host
-		// pages -= 1
-	}
-	// Update S by summing final page
-	// Output Result as S(N) = S
 		
-	
+		func_g<<<rows,1024>>>(d_squares, limit, d_sums, N, PageSize, pg);				
+		// device sync and test for errors
+		error_id = cudaDeviceSynchronize();
+		if(error_id != cudaSuccess) {
+			printf("cudaDeviceSync returned %d\n", error_id);
+			exit(0);
+		}
+		// copy device sums to host
+		error_id = cudaMemcpy(h_sums, d_sums, sizeof(long)*PageSize, cudaMemcpyDeviceToHost);
+		
+		// DEBUG
+		for(int x = 0; ((x<PageSize)&&(counted < N)); ++x,++counted) {
+			printf("%d:%ld  ",x,h_sums[x]);
+		}
+		printf("\n"); goto exit;
+		// END DEBUG
+		
+#if(0)
+		// Update S by summing last returned page page
+		for(int x = 0; ((x<20)&&(counted < N)); ++x,++counted) {
+			Sum += h_sums[x];
+		}
+#endif
+	}
+
+exit:
+	// Output Result as S(N) = S
+	printf("S(%ld) = %ld.\n", N, Sum);
+		
 	// CleanUp
 	free(h_sums);
 	cudaFree(d_sums);
