@@ -42,14 +42,20 @@ __global__ void set_squares(long *d_squares, long n_squares) {
 
 __global__ void func_g(long *managed_sums, long N, long* d_squares, long nSquares) {
 	long i = threadIdx.x + (blockDim.x * blockIdx.x);
-	if(i <= N) {
+	if((i == 0)||(i > N)) {
+		return;
+	}else if(i < 4) {
+		managed_sums[i] = 1;
+		return;
+	} else {
 		// search for largest square which divides i
 		for(int d = nSquares-1; d >= 0; --d) {
-			if((i % d_squares[d]) !=0 ) continue;
-			managed_sums[i] = d_squares[d];
-			break;
-		} //for...
-	} // if...
+			if((i % d_squares[d]) == 0) {
+				managed_sums[i] = d_squares[d];
+				return;
+			} // if...
+		} //for d...
+	} // else...
 }
 
 //----------------------------------------------------------------------
@@ -76,7 +82,7 @@ int main(int argc, char **argv)
 		exit(2);
 	}
 	// determine array dimensions for squares
-	const long nSquares = (long)(sqrt(sqrt(N)));	// defines size of array	
+	const long nSquares = (long)(sqrt(N+1));	// defines size of array	
 
 #if(DEBUG)
 		printf("target: %ld	nSquares: %ld\n", N, nSquares);
@@ -123,11 +129,13 @@ int main(int argc, char **argv)
 	func_g<<<nblocks, thdsperblk>>>(managed_sums, N, d_squares, nSquares);
 	cudaDeviceSynchronize();
 
-#if(DEBUG)
-	// Print the contents of managed_sums
-	for(int s = 1; s <= N; ++s) printf("s:%d sum:%ld  ", s, managed_sums[s]);
-	NL;
-#endif
+	long S = 0;
+	// Sum the contents of managed_sums
+	for(int s = 1; s <= N; ++s) {
+		//printf("sums[%d] = %ld  ", s, managed_sums[s]);
+		S += managed_sums[s];
+	}
+	NL;printf("S(%ld) = %d\n", N, S);
 	
 	// cleanup code
 	cudaFree(d_squares);
