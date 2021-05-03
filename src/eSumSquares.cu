@@ -37,7 +37,7 @@
 //----------------------------------------------------------------------
 __global__ void set_squares(long *d_squares, long n_squares) {
 	long i = threadIdx.x + (blockIdx.x * blockDim.x);
-	if(i < n_squares) d_squares[i] = (int)(i+1)*(i+1);
+	if(i < n_squares) d_squares[i] = (i+1)*(i+1);
 }
 
 __global__ void func_g(long *managed_sums, long N, long* d_squares, long nSquares) {
@@ -62,7 +62,7 @@ __global__ void func_g(long *managed_sums, long N, long* d_squares, long nSquare
 int main(int argc, char **argv)
 {
 	// This version will compute s(N) for N<1e8
-	const long MaxN = 1e8;
+	const long MaxN = 1e9;
 	cudaError_t error_id;
 	long *d_squares = NULL;
 	
@@ -89,17 +89,23 @@ int main(int argc, char **argv)
 #endif
 
 	// Allocate space on device
-	error_id = cudaMalloc(&d_squares, sizeof(long )*nSquares);
+	error_id = cudaMalloc(&d_squares, sizeof(long)*nSquares);
 	if(error_id != cudaSuccess) {
 		printf("cudaMalloc squares failed with %d\n", error_id);
 		exit(1);
 	}	
 	// launch the generator on kernel
 	printf("Generating squares\n");
-	set_squares<<<1,nSquares>>>(d_squares, nSquares);
-	cudaDeviceSynchronize();
+	cudaGetLastError(); // set cuda success to 1
+	set_squares<<< ((nSquares/1024)+1), 1024 >>>(d_squares, nSquares);
 
-#if(DEBUG)	
+	error_id = cudaPeekAtLastError();
+	if(error_id != cudaSuccess) {
+		printf("set_squares failed with %s\n", cudaGetErrorString(error_id));
+		exit(1);
+	}
+	cudaDeviceSynchronize();	
+#if(0)	
 		// allocate space on host and copy device squares
 		long *h_squares = (long *)malloc(sizeof(long )*nSquares);
 		cudaMemcpy(h_squares, d_squares, sizeof(long )*nSquares, cudaMemcpyDeviceToHost);
@@ -109,6 +115,7 @@ int main(int argc, char **argv)
 		free(h_squares);
 #endif
 
+#if(1)
 	// allocate managed memory based on N
 	const int thdsperblk = 1024;
 	const int maxblocks = 1e5;
@@ -134,12 +141,15 @@ int main(int argc, char **argv)
 	for(int s = 1; s <= N; ++s) {
 		//printf("sums[%d] = %ld  ", s, managed_sums[s]);
 		S += managed_sums[s];
+		S %= 1000000007L;
 	}
 	NL;printf("S(%ld) = %d\n", N, S);
 	
 	// cleanup code
-	cudaFree(d_squares);
 	cudaFree(managed_sums);
+#endif
+
+	cudaFree(d_squares);
 	return 0;
 }
 
